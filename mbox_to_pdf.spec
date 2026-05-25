@@ -18,6 +18,8 @@ a = Analysis(
         "playwright.sync_api",
         "fitz",
         "gui",
+        "update_checker",
+        "version",
         "tkinter",
         "tkinter.filedialog",
         "tkinter.scrolledtext",

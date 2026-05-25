@@ -206,4 +206,8 @@ class MboxToPdfApp(tk.Tk):
 
 def launch_gui() -> None:
     app = MboxToPdfApp()
+    if getattr(sys, "frozen", False):
+        from update_checker import schedule_update_check
+
+        schedule_update_check(app)
     app.mainloop()
