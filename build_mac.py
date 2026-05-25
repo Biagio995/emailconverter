@@ -71,7 +71,7 @@ def main() -> None:
 
     run([sys.executable, "-m", "pip", "install", "-r", "requirements.txt"])
     run([sys.executable, "-m", "pip", "install", "pyinstaller"])
-    run([sys.executable, "-m", "playwright", "install", "chromium"])
+    run([sys.executable, "-m", "playwright", "install", "chromium", "chromium-headless-shell"])
     run([sys.executable, "-m", "PyInstaller", "--noconfirm", str(spec_file)])
 
     if not app_path.is_dir():

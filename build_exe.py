@@ -30,7 +30,7 @@ def main() -> None:
 
     run([sys.executable, "-m", "pip", "install", "-r", "requirements.txt"])
     run([sys.executable, "-m", "pip", "install", "pyinstaller"])
-    run([sys.executable, "-m", "playwright", "install", "chromium"])
+    run([sys.executable, "-m", "playwright", "install", "chromium", "chromium-headless-shell"])
     run([sys.executable, "-m", "PyInstaller", "--noconfirm", str(spec_file)])
 
     browsers_src = find_playwright_browsers()
@@ -47,6 +47,22 @@ def main() -> None:
         shutil.rmtree(browsers_dest)
     print(f"Copia browser Playwright:\n  {browsers_src}\n  -> {browsers_dest}")
     shutil.copytree(browsers_src, browsers_dest)
+
+    headless = [
+        p for p in browsers_dest.iterdir()
+        if p.is_dir() and p.name.startswith("chromium_headless_shell-")
+    ]
+    chromium = [
+        p for p in browsers_dest.iterdir()
+        if p.is_dir() and p.name.startswith("chromium-")
+    ]
+    if not headless or not chromium:
+        print(
+            "ATTENZIONE: browser Playwright incompleti in ms-playwright. "
+            "Riesegui: python -m playwright install chromium chromium-headless-shell",
+            file=sys.stderr,
+        )
+        sys.exit(1)
 
     exe_path = dist_dir / "MBOXtoPDF.exe"
     print(f"\nBuild app completata: {exe_path}")

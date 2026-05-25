@@ -38,12 +38,19 @@ except ImportError:
 
 
 def setup_playwright_browsers() -> None:
-    """Imposta il percorso dei browser Playwright quando l'app è un .exe."""
-    if getattr(sys, "frozen", False):
-        base = Path(getattr(sys, "_MEIPASS", Path(sys.executable).parent))
-        bundled = base / "ms-playwright"
+    """Imposta il percorso dei browser Playwright quando l'app è impacchettata."""
+    if not getattr(sys, "frozen", False):
+        return
+
+    # I browser sono accanto all'exe (dist/MBOXtoPDF/ms-playwright), non in _internal/
+    candidates = [
+        Path(sys.executable).resolve().parent / "ms-playwright",
+        Path(getattr(sys, "_MEIPASS", "")) / "ms-playwright",
+    ]
+    for bundled in candidates:
         if bundled.is_dir():
             os.environ["PLAYWRIGHT_BROWSERS_PATH"] = str(bundled)
+            return
 
 
 def is_gui_mode() -> bool:
@@ -500,6 +507,7 @@ def main_cli() -> None:
 
 
 def main() -> None:
+    setup_playwright_browsers()
     if is_gui_mode():
         from gui import launch_gui
 
