@@ -129,7 +129,7 @@ class MboxToPdfApp(tk.Tk):
 
     def _build_cli_command(self, mbox_path: Path, output_path: Path) -> list[str]:
         if getattr(sys, "frozen", False):
-            cmd = [sys.executable, "--cli"]
+            cmd = [sys.executable]
         else:
             cmd = [sys.executable, str(Path(__file__).resolve().parent / "mbox_to_pdf.py")]
         cmd.extend(["--mbox", str(mbox_path), "--output", str(output_path)])

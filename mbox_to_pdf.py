@@ -47,9 +47,13 @@ def setup_playwright_browsers() -> None:
 
 
 def is_gui_mode() -> bool:
+    if "--gui" in sys.argv or "-g" in sys.argv:
+        return True
+    if "--mbox" in sys.argv or "--input-dir" in sys.argv:
+        return False
     if getattr(sys, "frozen", False):
-        return "--cli" not in sys.argv
-    return len(sys.argv) == 1 or "--gui" in sys.argv or "-g" in sys.argv
+        return len(sys.argv) == 1
+    return len(sys.argv) == 1
 
 
 if sys.platform == "darwin":
