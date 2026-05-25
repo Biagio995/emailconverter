@@ -345,11 +345,14 @@ def convert_mbox(
     log: Callable[[str], None] = print,
 ) -> tuple[int, int]:
     output_dir.mkdir(parents=True, exist_ok=True)
+    log(f"Apertura MBOX: {mbox_path.name}")
     mbox = mailbox.mbox(str(mbox_path))
     ok = 0
     errors = 0
 
     for index, msg in enumerate(mbox, start=1):
+        if index == 1 or index % 25 == 0:
+            log(f"Elaborazione email #{index}...")
         if limit is not None and index > limit:
             break
 
@@ -400,8 +403,10 @@ def run_conversion(
     total_ok = 0
     total_err = 0
 
+    log("Avvio browser Chromium...")
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch()
+        log("Browser pronto.")
         try:
             for mbox_file in mbox_files:
                 sub_output = (

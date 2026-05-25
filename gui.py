@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+import os
 import queue
+import subprocess
+import sys
 import threading
 import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog, messagebox, scrolledtext, ttk
-
-from mbox_to_pdf import run_conversion
 
 
 class MboxToPdfApp(tk.Tk):
@@ -126,6 +127,16 @@ class MboxToPdfApp(tk.Tk):
 
         return mbox_path, output_path
 
+    def _build_cli_command(self, mbox_path: Path, output_path: Path) -> list[str]:
+        if getattr(sys, "frozen", False):
+            cmd = [sys.executable, "--cli"]
+        else:
+            cmd = [sys.executable, str(Path(__file__).resolve().parent / "mbox_to_pdf.py")]
+        cmd.extend(["--mbox", str(mbox_path), "--output", str(output_path)])
+        if self.save_attachments.get():
+            cmd.append("--save-attachments")
+        return cmd
+
     def _start_conversion(self) -> None:
         if self.worker and self.worker.is_alive():
             return
@@ -137,18 +148,36 @@ class MboxToPdfApp(tk.Tk):
         mbox_path, output_path = inputs
         self._set_busy(True)
         self._log(f"\n--- Avvio: {mbox_path.name} ---")
+        self._log("Preparazione conversione (può richiedere alcuni secondi)...")
 
         def task() -> None:
+            cmd = self._build_cli_command(mbox_path, output_path)
             try:
-                ok, err = run_conversion(
-                    mbox_path=mbox_path,
-                    output_dir=output_path,
-                    save_attachments=self.save_attachments.get(),
-                    log=self._log,
-                )
+                env = os.environ.copy()
+                env["PYTHONUNBUFFERED"] = "1"
+                kwargs: dict = {
+                    "stdout": subprocess.PIPE,
+                    "stderr": subprocess.STDOUT,
+                    "text": True,
+                    "encoding": "utf-8",
+                    "errors": "replace",
+                    "bufsize": 1,
+                    "env": env,
+                }
+                if sys.platform == "win32":
+                    kwargs["creationflags"] = subprocess.CREATE_NO_WINDOW
+
+                with subprocess.Popen(cmd, **kwargs) as proc:
+                    assert proc.stdout is not None
+                    for line in proc.stdout:
+                        text = line.rstrip()
+                        if text:
+                            self._log(text)
+                    return_code = proc.wait()
+
                 self.after(
                     0,
-                    lambda: self._on_finished(ok, err, output_path),
+                    lambda: self._on_finished(return_code, output_path),
                 )
             except Exception as exc:
                 self.after(0, lambda: self._on_error(str(exc)))
@@ -156,18 +185,17 @@ class MboxToPdfApp(tk.Tk):
         self.worker = threading.Thread(target=task, daemon=True)
         self.worker.start()
 
-    def _on_finished(self, ok: int, err: int, output_path: Path) -> None:
+    def _on_finished(self, return_code: int, output_path: Path) -> None:
         self._set_busy(False)
-        self._log(f"\nCompletato: {ok} PDF creati, {err} errori.")
-        if err:
-            messagebox.showwarning(
-                "Conversione terminata con errori",
-                f"Creati {ok} PDF.\nErrori: {err}.\n\nOutput:\n{output_path}",
-            )
-        else:
+        if return_code == 0:
             messagebox.showinfo(
                 "Conversione completata",
-                f"Creati {ok} PDF in:\n{output_path}",
+                f"PDF salvati in:\n{output_path}",
+            )
+        else:
+            messagebox.showwarning(
+                "Conversione terminata con errori",
+                f"Controlla il log per i dettagli.\n\nOutput:\n{output_path}",
             )
 
     def _on_error(self, message: str) -> None:
