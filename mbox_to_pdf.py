@@ -190,24 +190,6 @@ def get_pdf_attachments(msg: Message) -> list[bytes]:
     return pdfs
 
 
-def list_attachments(msg: Message) -> list[tuple[str, int | None]]:
-    attachments: list[tuple[str, int | None]] = []
-    for part in msg.walk():
-        disposition = (part.get("Content-Disposition") or "").lower()
-        filename = part.get_filename()
-        if filename:
-            filename = decode_mime_header(filename)
-        elif "attachment" not in disposition:
-            continue
-        else:
-            filename = "allegato_senza_nome"
-
-        if "attachment" in disposition or filename:
-            size = len(part.get_payload(decode=True) or b"")
-            attachments.append((filename, size))
-    return attachments
-
-
 def save_attachments(msg: Message, dest_dir: Path) -> list[str]:
     saved: list[str] = []
     dest_dir.mkdir(parents=True, exist_ok=True)
@@ -371,16 +353,15 @@ def convert_mbox(
         date_prefix = format_date(msg).replace(":", "-").replace(" ", "_") or f"{index:06d}"
         base_name = sanitize_filename(f"{date_prefix}_{subject}")
         pdf_path = output_dir / f"{index:06d}_{base_name}.pdf"
-        attach_dir = output_dir / f"{index:06d}_{base_name}_allegati"
 
         attachment_names: list[str] = []
+        pdf_attachments: list[bytes] = []
         if save_attachments_flag:
+            attach_dir = output_dir / f"{index:06d}_{base_name}_allegati"
             attachment_names = save_attachments(msg, attach_dir)
-        else:
-            attachment_names = [name for name, _ in list_attachments(msg)]
+            pdf_attachments = get_pdf_attachments(msg)
 
         html = build_html(msg, attachment_names)
-        pdf_attachments = get_pdf_attachments(msg)
 
         try:
             render_email_pdf(html, pdf_path, pdf_attachments, browser)

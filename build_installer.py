@@ -47,9 +47,18 @@ def main() -> None:
     iss_file = project_dir / "installer.iss"
     setup_out = project_dir / "dist" / "MBOXtoPDF_Setup.exe"
 
+    dist_dir = project_dir / "dist" / "MBOXtoPDF"
     if not dist_app.is_file():
         print(
             "Manca la build dell'app. Esegui prima:\n  python build_exe.py",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    browsers = dist_dir / "ms-playwright"
+    if not browsers.is_dir():
+        print(
+            f"Manca {browsers}. Esegui prima:\n  python build_exe.py",
             file=sys.stderr,
         )
         sys.exit(1)

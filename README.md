@@ -27,6 +27,10 @@ Convert **MBOX** mail archives (Gmail export, Google Takeout, etc.) into **indiv
 
 > **Requirements:** Windows 10/11 (64-bit) · ~300 MB disk space (includes Chromium for HTML→PDF rendering)
 
+**End users:** download and run **`MBOXtoPDF_Setup.exe` only** — you do not need the `dist/` folder from the repository. The installer copies everything into `Program Files`.
+
+**Developers:** `dist/` is a local build output (gitignored), not something users clone from GitHub.
+
 ---
 
 ## Features

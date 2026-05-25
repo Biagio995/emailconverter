@@ -44,19 +44,3 @@ Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: de
 
 [Run]
 Filename: "{app}\{#MyAppExeName}"; Description: "Avvia {#MyAppName}"; Flags: nowait postinstall skipifsilent
-
-[Code]
-function InitializeSetup(): Boolean;
-begin
-  if not DirExists(ExpandConstant('{#SourceDir}')) then
-  begin
-    MsgBox(
-      'Cartella di build non trovata:' + #13#10 +
-      ExpandConstant('{src}\{#SourceDir}') + #13#10#13#10 +
-      'Esegui prima: python build_exe.py',
-      mbError, MB_OK);
-    Result := False;
-  end
-  else
-    Result := True;
-end;
