@@ -1,0 +1,26 @@
+# Build PyInstaller / installer (non vanno su GitHub)
+dist/
+build/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+.venv/
+venv/
+.env
+
+# Playwright (cache locale; si ricrea con playwright install)
+ms-playwright/
+
+# macOS / Windows
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE
+.idea/
+.vscode/
+*.swp
