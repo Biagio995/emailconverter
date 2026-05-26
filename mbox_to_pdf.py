@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Converte un file MBOX (Google Takeout / export Gmail) in PDF singoli.
+Converte un file MBOX (Google Takeout / export Gmail) in PDF (uno per email o unico file).
 
 Uso:
   python mbox_to_pdf.py --mbox "C:\\path\\to\\mail.mbox" --output "C:\\path\\to\\pdf"
@@ -179,6 +179,63 @@ def is_pdf_part(part: Message) -> bool:
     return part.get_content_type() == "application/pdf"
 
 
+IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".tif", ".tiff")
+IMAGE_MIME_TYPES = {
+    "image/jpeg",
+    "image/png",
+    "image/gif",
+    "image/webp",
+    "image/bmp",
+    "image/tiff",
+}
+
+
+def is_image_part(part: Message) -> bool:
+    ctype = (part.get_content_type() or "").lower()
+    if ctype in IMAGE_MIME_TYPES:
+        return True
+    filename = decode_mime_header(part.get_filename()).lower()
+    return any(filename.endswith(ext) for ext in IMAGE_EXTENSIONS)
+
+
+def image_filetype(part: Message) -> str:
+    ctype = (part.get_content_type() or "").lower()
+    mapping = {
+        "image/jpeg": "jpeg",
+        "image/png": "png",
+        "image/gif": "gif",
+        "image/webp": "webp",
+        "image/bmp": "bmp",
+        "image/tiff": "tiff",
+    }
+    if ctype in mapping:
+        return mapping[ctype]
+    filename = decode_mime_header(part.get_filename()).lower()
+    ext = Path(filename).suffix.lstrip(".")
+    return ext if ext in {"jpg", "jpeg", "png", "gif", "webp", "bmp", "tif", "tiff"} else "png"
+
+
+def is_attachment_part(part: Message) -> bool:
+    disposition = (part.get("Content-Disposition") or "").lower()
+    return bool(part.get_filename()) or "attachment" in disposition
+
+
+def list_attachment_names(msg: Message) -> list[str]:
+    names: list[str] = []
+    seen: set[str] = set()
+    for part in msg.walk():
+        if part.get_content_maintype() == "multipart":
+            continue
+        if not is_attachment_part(part):
+            continue
+        filename = part.get_filename() or "allegato_senza_nome"
+        filename = sanitize_filename(decode_mime_header(filename), max_len=180)
+        if filename not in seen:
+            seen.add(filename)
+            names.append(filename)
+    return names
+
+
 def get_pdf_attachments(msg: Message) -> list[bytes]:
     pdfs: list[bytes] = []
     for part in msg.walk():
@@ -296,6 +353,44 @@ def merge_pdf_files(base_pdf: Path, extra_pdfs: list[bytes], output_pdf: Path) -
     doc.close()
 
 
+def merge_pdf_paths(part_paths: list[Path], output_pdf: Path) -> None:
+    if fitz is None:
+        raise RuntimeError("Serve pymupdf: pip install pymupdf")
+    if not part_paths:
+        raise ValueError("Nessun PDF da unire.")
+
+    doc = fitz.open(part_paths[0])
+    for part_path in part_paths[1:]:
+        extra = fitz.open(part_path)
+        doc.insert_pdf(extra)
+        extra.close()
+    doc.save(output_pdf)
+    doc.close()
+
+
+def append_image_attachments(pdf_path: Path, msg: Message) -> None:
+    if fitz is None:
+        return
+
+    doc = fitz.open(pdf_path)
+    for part in msg.walk():
+        if part.get_content_maintype() == "multipart":
+            continue
+        if not is_attachment_part(part) or is_pdf_part(part) or not is_image_part(part):
+            continue
+        data = part.get_payload(decode=True)
+        if not data:
+            continue
+        try:
+            image_doc = fitz.open(stream=data, filetype=image_filetype(part))
+            doc.insert_pdf(image_doc)
+            image_doc.close()
+        except Exception:
+            continue
+    doc.saveIncr()
+    doc.close()
+
+
 def render_email_pdf(
     html: str,
     pdf_path: Path,
@@ -336,12 +431,19 @@ def convert_mbox(
     limit: int | None,
     browser,
     log: Callable[[str], None] = print,
+    single_pdf: bool = False,
 ) -> tuple[int, int]:
     output_dir.mkdir(parents=True, exist_ok=True)
     log(f"Apertura MBOX: {mbox_path.name}")
     mbox = mailbox.mbox(str(mbox_path))
     ok = 0
     errors = 0
+    part_pdfs: list[Path] = []
+    temp_dir: Path | None = None
+
+    if single_pdf:
+        temp_dir = output_dir / f".tmp_{sanitize_filename(mbox_path.stem)}"
+        temp_dir.mkdir(parents=True, exist_ok=True)
 
     for index, msg in enumerate(mbox, start=1):
         if index == 1 or index % 25 == 0:
@@ -352,26 +454,58 @@ def convert_mbox(
         subject = decode_mime_header(msg.get("Subject")) or "senza_oggetto"
         date_prefix = format_date(msg).replace(":", "-").replace(" ", "_") or f"{index:06d}"
         base_name = sanitize_filename(f"{date_prefix}_{subject}")
-        pdf_path = output_dir / f"{index:06d}_{base_name}.pdf"
+
+        if single_pdf:
+            assert temp_dir is not None
+            pdf_path = temp_dir / f"{index:06d}.part.pdf"
+        else:
+            pdf_path = output_dir / f"{index:06d}_{base_name}.pdf"
 
         attachment_names: list[str] = []
-        pdf_attachments: list[bytes] = []
+        pdf_attachments = get_pdf_attachments(msg)
+
         if save_attachments_flag:
             attach_dir = output_dir / f"{index:06d}_{base_name}_allegati"
             attachment_names = save_attachments(msg, attach_dir)
-            pdf_attachments = get_pdf_attachments(msg)
+        elif single_pdf:
+            attachment_names = list_attachment_names(msg)
 
         html = build_html(msg, attachment_names)
 
         try:
             render_email_pdf(html, pdf_path, pdf_attachments, browser)
-            ok += 1
-            log(f"[OK] {pdf_path.name}")
+            if single_pdf:
+                append_image_attachments(pdf_path, msg)
+                part_pdfs.append(pdf_path)
+                log(f"[OK] email #{index} inclusa nel PDF unico")
+            else:
+                ok += 1
+                log(f"[OK] {pdf_path.name}")
         except Exception as exc:
             errors += 1
             log(f"[ERR] email #{index}: {exc}")
 
     mbox.close()
+
+    if single_pdf and part_pdfs:
+        final_pdf = output_dir / f"{sanitize_filename(mbox_path.stem)}.pdf"
+        try:
+            merge_pdf_paths(part_pdfs, final_pdf)
+            ok = len(part_pdfs)
+            log(f"[OK] PDF unico creato: {final_pdf.name}")
+        except Exception as exc:
+            errors += len(part_pdfs)
+            ok = 0
+            log(f"[ERR] unione PDF: {exc}")
+        finally:
+            if temp_dir and temp_dir.exists():
+                for part in part_pdfs:
+                    part.unlink(missing_ok=True)
+                try:
+                    temp_dir.rmdir()
+                except OSError:
+                    pass
+
     return ok, errors
 
 
@@ -381,6 +515,7 @@ def run_conversion(
     save_attachments: bool = False,
     limit: int | None = None,
     log: Callable[[str], None] = print,
+    single_pdf: bool = False,
 ) -> tuple[int, int]:
     if fitz is None:
         raise RuntimeError("Manca pymupdf. Esegui: pip install -r requirements.txt")
@@ -412,6 +547,7 @@ def run_conversion(
                     limit,
                     browser,
                     log=log,
+                    single_pdf=single_pdf,
                 )
                 total_ok += ok
                 total_err += err
@@ -447,6 +583,11 @@ def main_cli() -> None:
         action="store_true",
         help="Salva anche gli allegati in sottocartelle accanto ai PDF",
     )
+    parser.add_argument(
+        "--single-pdf",
+        action="store_true",
+        help="Crea un unico PDF con tutte le email (e allegati PDF/immagine)",
+    )
     parser.add_argument("--limit", type=int, help="Converte solo le prime N email (test)")
     args = parser.parse_args()
 
@@ -476,6 +617,7 @@ def main_cli() -> None:
                     args.save_attachments,
                     args.limit,
                     browser,
+                    single_pdf=args.single_pdf,
                 )
                 total_ok += ok
                 total_err += err

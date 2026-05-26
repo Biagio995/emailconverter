@@ -16,11 +16,12 @@ class MboxToPdfApp(tk.Tk):
     def __init__(self) -> None:
         super().__init__()
         self.title("MBOX to PDF")
-        self.minsize(520, 420)
-        self.geometry("640x480")
+        self.minsize(520, 480)
+        self.geometry("640x520")
 
         self.mbox_path = tk.StringVar()
         self.output_dir = tk.StringVar()
+        self.output_mode = tk.StringVar(value="separate")
         self.save_attachments = tk.BooleanVar(value=False)
         self.log_queue: queue.Queue[str] = queue.Queue()
         self.worker: threading.Thread | None = None
@@ -49,25 +50,40 @@ class MboxToPdfApp(tk.Tk):
             row=1, column=2, **pad
         )
 
+        mode_frame = ttk.LabelFrame(frame, text="Modalità output", padding=(8, 4))
+        mode_frame.grid(row=2, column=0, columnspan=3, sticky=tk.EW, **pad)
+        ttk.Radiobutton(
+            mode_frame,
+            text="Un PDF per ogni email (con allegati PDF integrati)",
+            variable=self.output_mode,
+            value="separate",
+        ).pack(anchor=tk.W)
+        ttk.Radiobutton(
+            mode_frame,
+            text="Un unico PDF con tutte le email e gli allegati",
+            variable=self.output_mode,
+            value="single",
+        ).pack(anchor=tk.W)
+
         ttk.Checkbutton(
             frame,
-            text="Salva anche gli allegati in sottocartelle",
+            text="Salva anche gli allegati in sottocartelle (modalità separata)",
             variable=self.save_attachments,
-        ).grid(row=2, column=0, columnspan=3, sticky=tk.W, **pad)
+        ).grid(row=3, column=0, columnspan=3, sticky=tk.W, **pad)
 
         self.convert_btn = ttk.Button(
             frame, text="Avvia conversione", command=self._start_conversion
         )
-        self.convert_btn.grid(row=3, column=0, columnspan=3, pady=(8, 4))
+        self.convert_btn.grid(row=4, column=0, columnspan=3, pady=(8, 4))
 
-        ttk.Label(frame, text="Log:").grid(row=4, column=0, sticky=tk.NW, **pad)
+        ttk.Label(frame, text="Log:").grid(row=5, column=0, sticky=tk.NW, **pad)
         self.log_text = scrolledtext.ScrolledText(
-            frame, height=14, state=tk.DISABLED, wrap=tk.WORD
+            frame, height=12, state=tk.DISABLED, wrap=tk.WORD
         )
-        self.log_text.grid(row=4, column=1, columnspan=2, sticky=tk.NSEW, **pad)
+        self.log_text.grid(row=5, column=1, columnspan=2, sticky=tk.NSEW, **pad)
 
         frame.columnconfigure(1, weight=1)
-        frame.rowconfigure(4, weight=1)
+        frame.rowconfigure(5, weight=1)
 
     def _pick_mbox(self) -> None:
         path = filedialog.askopenfilename(
@@ -133,6 +149,8 @@ class MboxToPdfApp(tk.Tk):
         else:
             cmd = [sys.executable, str(Path(__file__).resolve().parent / "mbox_to_pdf.py")]
         cmd.extend(["--mbox", str(mbox_path), "--output", str(output_path)])
+        if self.output_mode.get() == "single":
+            cmd.append("--single-pdf")
         if self.save_attachments.get():
             cmd.append("--save-attachments")
         return cmd
