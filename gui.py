@@ -25,7 +25,8 @@ class MboxToPdfApp(tk.Tk):
         self.output_dir = tk.StringVar()
         self.output_mode = tk.StringVar(value="separate")
         self.save_attachments = tk.BooleanVar(value=False)
-        self.merge_output_path = tk.StringVar()
+        self.merge_output_dir = tk.StringVar()
+        self.merge_output_name = tk.StringVar(value="unito.pdf")
         self.merge_pdf_list: list[Path] = []
 
         self.log_queue: queue.Queue[str] = queue.Queue()
@@ -148,23 +149,26 @@ class MboxToPdfApp(tk.Tk):
         )
         ttk.Button(btn_col, text="Svuota lista", command=self._merge_clear).pack(side=tk.LEFT)
 
-        ttk.Label(frame, text="File PDF di output:").grid(
-            row=3, column=0, sticky=tk.W, **pad
+        ttk.Label(frame, text="Nome file:").grid(row=3, column=0, sticky=tk.W, **pad)
+        ttk.Entry(frame, textvariable=self.merge_output_name, width=52).grid(
+            row=3, column=1, sticky=tk.EW, **pad
         )
-        out_row = ttk.Frame(frame)
-        out_row.grid(row=4, column=0, columnspan=2, sticky=tk.EW, padx=8, pady=4)
-        out_row.columnconfigure(0, weight=1)
-        ttk.Entry(out_row, textvariable=self.merge_output_path).grid(
-            row=0, column=0, sticky=tk.EW, padx=(0, 8)
+
+        ttk.Label(frame, text="Cartella output:").grid(
+            row=4, column=0, sticky=tk.W, **pad
         )
-        ttk.Button(out_row, text="Sfoglia...", command=self._merge_pick_output).grid(
-            row=0, column=1
+        ttk.Entry(frame, textvariable=self.merge_output_dir, width=52).grid(
+            row=4, column=1, sticky=tk.EW, **pad
         )
+        ttk.Button(frame, text="Sfoglia...", command=self._merge_pick_output_dir).grid(
+            row=4, column=2, **pad
+        )
+        frame.columnconfigure(1, weight=1)
 
         self.merge_btn = ttk.Button(
             frame, text="Avvia unione", command=self._start_merge
         )
-        self.merge_btn.grid(row=5, column=0, columnspan=2, pady=(8, 4))
+        self.merge_btn.grid(row=5, column=0, columnspan=3, pady=(8, 4))
 
     def _pick_mbox(self) -> None:
         path = filedialog.askopenfilename(
@@ -243,14 +247,10 @@ class MboxToPdfApp(tk.Tk):
             self.merge_pdf_list.clear()
             self._merge_refresh_listbox()
 
-    def _merge_pick_output(self) -> None:
-        path = filedialog.asksaveasfilename(
-            title="Salva PDF unito come",
-            defaultextension=".pdf",
-            filetypes=[("File PDF", "*.pdf")],
-        )
+    def _merge_pick_output_dir(self) -> None:
+        path = filedialog.askdirectory(title="Seleziona cartella di salvataggio")
         if path:
-            self.merge_output_path.set(path)
+            self.merge_output_dir.set(path)
 
     def _append_log(self, message: str) -> None:
         self.log_text.configure(state=tk.NORMAL)
@@ -324,14 +324,21 @@ class MboxToPdfApp(tk.Tk):
             )
             return None
 
-        output = self.merge_output_path.get().strip()
-        if not output:
-            messagebox.showwarning("Attenzione", "Indica il percorso del PDF di output.")
+        output_dir = self.merge_output_dir.get().strip()
+        output_name = self.merge_output_name.get().strip()
+
+        if not output_name:
+            messagebox.showwarning("Attenzione", "Indica il nome del file PDF.")
+            return None
+        if not output_dir:
+            messagebox.showwarning("Attenzione", "Seleziona la cartella di salvataggio.")
             return None
 
-        output_path = Path(output)
-        if output_path.suffix.lower() != ".pdf":
-            output_path = output_path.with_suffix(".pdf")
+        filename = Path(output_name).name
+        if Path(filename).suffix.lower() != ".pdf":
+            filename = f"{Path(filename).stem}.pdf"
+
+        output_path = Path(output_dir) / filename
 
         if output_path.exists():
             if not messagebox.askyesno(

@@ -61,7 +61,7 @@ On each launch, the installed app checks GitHub Releases in the background. If a
 1. Open the **Unisci PDF** tab.
 2. **Aggiungi PDF...** — add as many PDF files as you need (order matters).
 3. Use **Su** / **Giù** to reorder, **Rimuovi selezionati** to remove files.
-4. Choose the output file path, then click **Avvia unione**.
+4. Enter the output **file name** (e.g. `unito.pdf`) and **output folder**, then click **Avvia unione**.
 
 Each message is saved as:
 
