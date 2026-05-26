@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import sys
 import threading
 import webbrowser
+from pathlib import Path
 from typing import Callable
 from urllib.error import URLError
 from urllib.request import Request, urlopen
@@ -35,6 +37,53 @@ def parse_version(value: str) -> tuple[int, ...]:
 
 def is_newer(latest: str, current: str) -> bool:
     return parse_version(latest) > parse_version(current)
+
+
+def _config_dir() -> Path:
+    if sys.platform == "win32":
+        base = Path(os.environ.get("LOCALAPPDATA", Path.home()))
+    elif sys.platform == "darwin":
+        base = Path.home() / "Library" / "Application Support"
+    else:
+        base = Path.home() / ".config"
+    return base / "MBOXtoPDF"
+
+
+def _prefs_path() -> Path:
+    return _config_dir() / "update_prefs.json"
+
+
+def load_prefs() -> dict:
+    path = _prefs_path()
+    if not path.is_file():
+        return {}
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return {}
+
+
+def save_prefs(prefs: dict) -> None:
+    path = _prefs_path()
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(prefs, indent=2), encoding="utf-8")
+    except OSError:
+        pass
+
+
+def should_prompt_for_update(new_version: str) -> bool:
+    """Non chiedere di nuovo se l'utente ha già rifiutato questa versione."""
+    dismissed = load_prefs().get("dismissed_version", "")
+    if not dismissed:
+        return True
+    return is_newer(new_version, dismissed)
+
+
+def remember_dismissed_version(version: str) -> None:
+    prefs = load_prefs()
+    prefs["dismissed_version"] = version
+    save_prefs(prefs)
 
 
 def _platform_asset_name() -> str:
@@ -82,7 +131,11 @@ def check_for_update(on_update: Callable[[str, str, str], None]) -> None:
     if not tag or not is_newer(tag, __version__):
         return
 
-    on_update(tag.lstrip("vV"), __version__, get_download_url(release))
+    new_version = tag.lstrip("vV")
+    if not should_prompt_for_update(new_version):
+        return
+
+    on_update(new_version, __version__, get_download_url(release))
 
 
 def prompt_download(
@@ -99,17 +152,19 @@ def prompt_download(
             f"È disponibile la versione {new_version}.\n"
             f"Versione installata: {current_version}.\n\n"
             "Vuoi scaricare l'aggiornamento ora?\n"
-            "(Si aprirà il download nel browser.)"
+            "(Si aprirà il download nel browser.)\n\n"
+            "Scegli «No» per non essere ricordato finché non uscirà una versione più recente."
         ),
         parent=parent,
     ):
+        remember_dismissed_version(new_version)
         return
 
     webbrowser.open(download_url)
 
 
 def schedule_update_check(app) -> None:
-    """Avvia il controllo aggiornamenti e mostra il dialog sulla finestra principale."""
+    """All'avvio dell'app, controlla in background se esiste un aggiornamento."""
 
     def on_update(new_version: str, current_version: str, download_url: str) -> None:
         app.after(

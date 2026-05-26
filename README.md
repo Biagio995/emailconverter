@@ -29,6 +29,8 @@ Convert **MBOX** mail archives (Gmail export, Google Takeout, etc.) into **indiv
 
 **End users:** download and run **`MBOXtoPDF_Setup.exe` only** — you do not need the `dist/` folder from the repository. The installer copies everything into `Program Files`.
 
+On each launch, the installed app checks GitHub Releases in the background. If a newer version exists, you are prompted once to download the installer (you are not asked again for the same version if you choose **No**).
+
 **Developers:** `dist/` is a local build output (gitignored), not something users clone from GitHub.
 
 ---
@@ -36,6 +38,7 @@ Convert **MBOX** mail archives (Gmail export, Google Takeout, etc.) into **indiv
 ## Features
 
 - Graphical interface — pick your `.mbox` file and output folder
+- **Merge PDF** tab — combine any number of PDF files into one (no 25-file limit)
 - Preserves HTML email layout (images, formatting) via headless Chromium
 - Merges PDF attachments into the generated email PDF when present
 - Optional export of non-PDF attachments into subfolders
@@ -52,6 +55,13 @@ Convert **MBOX** mail archives (Gmail export, Google Takeout, etc.) into **indiv
 3. **Browse…** → select your `.mbox` file.
 4. **Browse…** → choose the output directory.
 5. Click **Start conversion**.
+
+### Merge PDF (Unisci PDF tab)
+
+1. Open the **Unisci PDF** tab.
+2. **Aggiungi PDF...** — add as many PDF files as you need (order matters).
+3. Use **Su** / **Giù** to reorder, **Rimuovi selezionati** to remove files.
+4. Choose the output file path, then click **Avvia unione**.
 
 Each message is saved as:
 
